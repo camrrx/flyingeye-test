@@ -33,7 +33,9 @@ const selectedSites = ref([]);
 const loading = ref(false);
 const error = ref(null);
 
-const API_URL = "/api/device";
+const API_URL = import.meta.env.PROD
+	? import.meta.env.VITE_API_BASE_URL + "/api/device"
+	: "/api/device";
 const API_TOKEN = import.meta.env.VITE_API_TOKEN;
 
 // Récupérer la liste des sites uniques à partir des appareils
