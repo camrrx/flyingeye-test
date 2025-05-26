@@ -2,9 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Styles Cesium */
-@import "cesium/Build/Cesium/Widgets/widgets.css";
-
 #app {
 	margin: 0 auto;
 	padding: 2rem;
