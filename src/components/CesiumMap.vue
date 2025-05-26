@@ -35,7 +35,7 @@ const currentStep = ref(0);
 const playing = ref(false);
 let playInterval = null;
 
-Cesium.Ion.defaultAccessToken = import.meta.env.CESIUM_TOKEN;
+Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
 const createVisionCone = (
 	position,

@@ -34,8 +34,7 @@ const loading = ref(false);
 const error = ref(null);
 
 const API_URL = "/api/device";
-const API_TOKEN =
-	"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiZmVkb2NrX3VzZXIifQ.-fJpasraNiTSKlM9grE3eeGDGkeqnoNielFFL1wlwiQ";
+const API_TOKEN = import.meta.env.VITE_API_TOKEN;
 
 // Récupérer la liste des sites uniques à partir des appareils
 const sites = computed(() => {
@@ -69,19 +68,38 @@ const fetchDevices = async () => {
 		const response = await fetch(`${API_URL}?ConId=1`, {
 			headers: {
 				Authorization: `Bearer ${API_TOKEN}`,
+				Accept: "application/json",
+				"Content-Type": "application/json",
 			},
 		});
 
+		if (!response.ok) {
+			throw new Error(`Erreur HTTP: ${response.status} ${response.statusText}`);
+		}
+
 		const data = await response.json();
-		devices.value = data.map(device => ({
+
+		// Vérifier si data est un tableau ou si les données sont dans une propriété
+		const devicesData = Array.isArray(data)
+			? data
+			: data.devices || data.data || [];
+
+		if (!Array.isArray(devicesData)) {
+			throw new Error(
+				"Format de données invalide: la réponse n'est pas un tableau"
+			);
+		}
+
+		devices.value = devicesData.map(device => ({
 			id: device.id,
 			dev_name: device.dev_name,
 			sit_id: device.sit_id,
 			sit_name: device.sit_name,
 		}));
 	} catch (err) {
-		console.error("Erreur:", err);
-		error.value = err.message;
+		console.error("Erreur détaillée:", err);
+		error.value =
+			err.message || "Une erreur est survenue lors du chargement des appareils";
 	} finally {
 		loading.value = false;
 	}
