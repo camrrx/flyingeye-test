@@ -13,4 +13,15 @@ export default defineConfig({
 			"@": fileURLToPath(new URL("./src", import.meta.url)),
 		},
 	},
+	server: {
+		port: 4000,
+		proxy: {
+			"/api": {
+				target: "https://test.hub.dev.flyingeye.fr/",
+				changeOrigin: true,
+				secure: false,
+				rewrite: path => path.replace(/^\/api/, "/api"),
+			},
+		},
+	},
 });
