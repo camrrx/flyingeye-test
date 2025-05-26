@@ -301,7 +301,7 @@ function pause() {
 
 onMounted(async () => {
 	try {
-		const response = await fetch("/jsonTest.json");
+		const response = await fetch("../../public/jsonTest.json");
 		if (!response.ok) {
 			throw new Error(`Erreur chargement JSON: ${response.statusText}`);
 		}

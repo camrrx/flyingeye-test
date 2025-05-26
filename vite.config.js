@@ -13,6 +13,7 @@ export default defineConfig({
 			"@": fileURLToPath(new URL("./src", import.meta.url)),
 		},
 	},
+	publicDir: "public",
 	server: {
 		port: 4000,
 		proxy: {
@@ -22,6 +23,12 @@ export default defineConfig({
 				secure: false,
 				rewrite: path => path.replace(/^\/api/, "/api"),
 			},
+		},
+		hmr: {
+			protocol: "ws",
+		},
+		watch: {
+			usePolling: true,
 		},
 	},
 });
