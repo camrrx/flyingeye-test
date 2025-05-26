@@ -19,7 +19,6 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import * as Cesium from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
-import jsonTest from "../assets/jsonTest.json";
 import FlightPlayerControls from "./FlightPlayerControls.vue";
 
 const cesiumContainer = ref(null);
@@ -29,17 +28,16 @@ let coneEntities = [];
 let pointEntities = [];
 let pathEntity = null;
 
-const records = jsonTest.flight_records;
-const steps = Object.values(records);
+let records = null;
+const steps = ref([]);
+
 const currentStep = ref(0);
 const playing = ref(false);
 let playInterval = null;
 
-// token Cesium
 Cesium.Ion.defaultAccessToken =
 	"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjYTkzYzZiNy1hNTI4LTRmNDktYmJhOS00NDI0N2FmM2FkNzciLCJpZCI6MzA1MzI5LCJpYXQiOjE3NDc5MjU3Nzl9.twHztm9rPghKse-wqZjELX4p7R-w1hPQGB1IQqtp8pE";
 
-// Fonction pour créer le cône de vision
 const createVisionCone = (
 	position,
 	heading,
@@ -54,7 +52,6 @@ const createVisionCone = (
 		position.altitude
 	);
 
-	//Orientation à partir du heading, pitch, roll du drone
 	const hpr = new Cesium.HeadingPitchRoll(
 		Cesium.Math.toRadians(heading),
 		Cesium.Math.toRadians(pitch),
@@ -133,6 +130,18 @@ const createVisionCone = (
 			},
 		})
 	);
+
+	coneEntities.push(
+		viewer.entities.add({
+			polygon: {
+				hierarchy: new Cesium.PolygonHierarchy([
+					positionCartesian,
+					...worldConePoints,
+				]),
+				material: Cesium.Color.WHITE.withAlpha(0.1),
+			},
+		})
+	);
 };
 
 function clearCone() {
@@ -145,7 +154,11 @@ function clearCone() {
 }
 
 function clearDrone() {
-	if (droneEntity) viewer.entities.remove(droneEntity);
+	if (droneEntity) {
+		if (viewer && !viewer.isDestroyed()) {
+			viewer.entities.remove(droneEntity);
+		}
+	}
 	droneEntity = null;
 }
 
@@ -153,9 +166,8 @@ function updateDronePositionAndCamera(stepIdx) {
 	clearDrone();
 	clearCone();
 
-	const step = steps[stepIdx];
+	const step = steps.value[stepIdx];
 	if (!step) {
-		console.warn("Étape invalide:", stepIdx);
 		return;
 	}
 
@@ -171,7 +183,10 @@ function updateDronePositionAndCamera(stepIdx) {
 			image: "/drone.png",
 			width: 100,
 			height: 100,
-			rotation: Cesium.Math.toRadians(step.attitude_head),
+			rotation:
+				step.attitude_head !== undefined
+					? Cesium.Math.toRadians(step.attitude_head)
+					: 0,
 			disableDepthTestDistance: Infinity,
 		},
 		label: {
@@ -189,9 +204,9 @@ function updateDronePositionAndCamera(stepIdx) {
 			latitude: step.latitude,
 			altitude: step.height || step.altitude || 0,
 		},
-		step.attitude_head,
-		step.attitude_pitch,
-		step.attitude_roll
+		step.attitude_head !== undefined ? step.attitude_head : 0,
+		step.attitude_pitch !== undefined ? step.attitude_pitch : 0,
+		step.attitude_roll !== undefined ? step.attitude_roll : 0
 	);
 
 	// Centrer la caméra sur la nouvelle position du drone
@@ -206,13 +221,17 @@ function updateDronePositionAndCamera(stepIdx) {
 }
 
 function clearPoints() {
-	for (const e of pointEntities) viewer.entities.remove(e);
+	for (const e of pointEntities) {
+		if (viewer && !viewer.isDestroyed()) {
+			viewer.entities.remove(e);
+		}
+	}
 	pointEntities = [];
 }
 
 function showStepPoints() {
 	clearPoints();
-	steps.forEach((step, idx) => {
+	steps.value.forEach((step, idx) => {
 		pointEntities.push(
 			viewer.entities.add({
 				position: Cesium.Cartesian3.fromDegrees(
@@ -221,20 +240,20 @@ function showStepPoints() {
 					step.height || step.altitude || 0
 				),
 				point: {
-					pixelSize: 12,
+					pixelSize: 8,
 					color: Cesium.Color.YELLOW,
 					outlineColor: Cesium.Color.BLACK,
-					outlineWidth: 2,
+					outlineWidth: 1,
 				},
 				label: {
 					text: String(idx + 1),
-					font: "16px sans-serif",
+					font: "14px sans-serif",
 					fillColor: Cesium.Color.BLACK,
 					outlineColor: Cesium.Color.WHITE,
 					outlineWidth: 2,
-					style: Cesium.LabelStyle.FILL_AND_OUTLINE,
 					verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-					pixelOffset: new Cesium.Cartesian2(0, -18),
+					pixelOffset: new Cesium.Cartesian2(4, -10),
+					disableDepthTestDistance: Infinity,
 				},
 			})
 		);
@@ -248,15 +267,22 @@ function prevStep() {
 	}
 }
 function nextStep() {
-	if (currentStep.value < steps.length - 1) {
+	if (currentStep.value < steps.value.length - 1) {
 		currentStep.value++;
 		updateDronePositionAndCamera(currentStep.value);
 	}
 }
 function play() {
+	if (playing.value) return;
+
 	playing.value = true;
+	if (currentStep.value === steps.value.length - 1) {
+		currentStep.value = 0;
+	}
+	updateDronePositionAndCamera(currentStep.value);
+
 	playInterval = setInterval(() => {
-		if (currentStep.value < steps.length - 1) {
+		if (currentStep.value < steps.value.length - 1) {
 			currentStep.value++;
 			updateDronePositionAndCamera(currentStep.value);
 		} else {
@@ -264,45 +290,74 @@ function play() {
 		}
 	}, 800);
 }
+
 function pause() {
 	playing.value = false;
-	if (playInterval) clearInterval(playInterval);
+	if (playInterval) {
+		clearInterval(playInterval);
+	}
+	playInterval = null;
 }
 
-onMounted(() => {
-	viewer = new Cesium.Viewer(cesiumContainer.value, {
-		terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-		animation: false,
-		baseLayerPicker: false,
-		fullscreenButton: false,
-		vrButton: false,
-		geocoder: false,
-		homeButton: false,
-		infoBox: false,
-		sceneModePicker: false,
-		selectionIndicator: false,
-		timeline: false,
-		navigationHelpButton: false,
-		navigationInstructionsInitiallyVisible: false,
-	});
-	// Tracé du chemin
-	const path = steps.map(step =>
-		Cesium.Cartesian3.fromDegrees(
-			step.longitude,
-			step.latitude,
-			step.height || step.altitude || 0
-		)
-	);
-	pathEntity = viewer.entities.add({
-		polyline: {
-			positions: path,
-			width: 3,
-			material: Cesium.Color.GREEN,
-		},
-	});
-	showStepPoints();
-	if (steps.length > 0) {
+onMounted(async () => {
+	try {
+		const response = await fetch("/jsonTest.json");
+		if (!response.ok) {
+			throw new Error(`Erreur chargement JSON: ${response.statusText}`);
+		}
+		const jsonData = await response.json();
+		records = jsonData.flight_records;
+
+		if (!records || typeof records !== "object") {
+			console.error("Error");
+			return;
+		}
+
+		steps.value = Object.values(records);
+
+		if (steps.value.length === 0) {
+			console.warn("Aucune donnée d'étape trouvée dans le JSON.");
+			return;
+		}
+
+		viewer = new Cesium.Viewer(cesiumContainer.value, {
+			terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+			animation: false,
+			baseLayerPicker: false,
+			fullscreenButton: false,
+			vrButton: false,
+			geocoder: false,
+			homeButton: false,
+			infoBox: false,
+			sceneModePicker: false,
+			selectionIndicator: false,
+			timeline: false,
+			navigationHelpButton: false,
+			navigationInstructionsInitiallyVisible: false,
+		});
+
+		const path = steps.value.map(step =>
+			Cesium.Cartesian3.fromDegrees(
+				step.longitude,
+				step.latitude,
+				step.height || step.altitude || 0
+			)
+		);
+		pathEntity = viewer.entities.add({
+			polyline: {
+				positions: path,
+				width: 3,
+				material: Cesium.Color.GREEN,
+			},
+		});
+
+		showStepPoints();
 		updateDronePositionAndCamera(currentStep.value);
+	} catch (error) {
+		console.error(
+			"Erreur lors du chargement ou du traitement des données du vol:",
+			error
+		);
 	}
 });
 
